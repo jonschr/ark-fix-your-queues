@@ -1,0 +1,46 @@
+name: Publish Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Test
+        run: dotnet test ArkFixYourQueues.sln -c Release
+
+      - name: Verify tag matches app version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content src/ArkFixYourQueues/ArkFixYourQueues.csproj
+          $version = ($project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+          $tagVersion = "${{ github.ref_name }}".TrimStart('v', 'V')
+          if ($version -ne $tagVersion) { throw "Tag $tagVersion does not match app version $version" }
+
+      - name: Publish self-contained app
+        shell: pwsh
+        run: |
+          dotnet publish src/ArkFixYourQueues/ArkFixYourQueues.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o artifacts/app
+          dotnet publish src/ArkJoinAssist.Updater/ArkJoinAssist.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/updater
+          Copy-Item artifacts/updater/ArkJoinAssist.Updater.exe artifacts/app/ArkJoinAssist.Updater.exe -Force
+          tar.exe -a -c -f artifacts/ARK-Join-Assist-win-x64.zip -C artifacts/app .
+          $hash = (Get-FileHash artifacts/ARK-Join-Assist-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ARK-Join-Assist-win-x64.zip" | Set-Content artifacts/ARK-Join-Assist-win-x64.zip.sha256 -NoNewline
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --generate-notes --title "ARK Join Assist ${{ github.ref_name }}" artifacts/ARK-Join-Assist-win-x64.zip artifacts/ARK-Join-Assist-win-x64.zip.sha256

@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArkFixYourQueues", "src\ArkFixYourQueues\ArkFixYourQueues.csproj", "{9CDA5AC0-99E0-4E04-A2B8-DB2245D5EBBF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArkFixYourQueues.Tests", "tests\ArkFixYourQueues.Tests\ArkFixYourQueues.Tests.csproj", "{D0AA27F8-2D99-4E5A-9F8F-D93F19E3C914}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArkJoinAssist.Updater", "src\ArkJoinAssist.Updater\ArkJoinAssist.Updater.csproj", "{B463BEF9-5A49-4D99-8C2F-BC9437EA8210}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9CDA5AC0-99E0-4E04-A2B8-DB2245D5EBBF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9CDA5AC0-99E0-4E04-A2B8-DB2245D5EBBF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9CDA5AC0-99E0-4E04-A2B8-DB2245D5EBBF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9CDA5AC0-99E0-4E04-A2B8-DB2245D5EBBF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0AA27F8-2D99-4E5A-9F8F-D93F19E3C914}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0AA27F8-2D99-4E5A-9F8F-D93F19E3C914}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0AA27F8-2D99-4E5A-9F8F-D93F19E3C914}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0AA27F8-2D99-4E5A-9F8F-D93F19E3C914}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B463BEF9-5A49-4D99-8C2F-BC9437EA8210}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B463BEF9-5A49-4D99-8C2F-BC9437EA8210}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B463BEF9-5A49-4D99-8C2F-BC9437EA8210}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B463BEF9-5A49-4D99-8C2F-BC9437EA8210}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

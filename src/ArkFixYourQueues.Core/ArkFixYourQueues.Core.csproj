@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ArkFixYourQueues</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\ArkFixYourQueues\RetryController.cs" Link="RetryController.cs" />
+    <Compile Include="..\ArkFixYourQueues\ServerTarget.cs" Link="ServerTarget.cs" />
+    <Compile Include="..\ArkFixYourQueues\AsaLocalDiscovery.cs" Link="AsaLocalDiscovery.cs" />
+  </ItemGroup>
+</Project>

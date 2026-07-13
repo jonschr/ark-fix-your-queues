@@ -1,0 +1,171 @@
+<Window x:Class="ArkFixYourQueues.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ArkFixYourQueues"
+        Title="ARK Join Assist v0.12.0" Width="1050" Height="800" MinWidth="820" MinHeight="620"
+        Background="{StaticResource PageBrush}" WindowStartupLocation="CenterScreen">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource PageBrush}">
+        <Grid Margin="20" Background="{StaticResource PageBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,18">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="ARK Join Assist" FontSize="26" FontWeight="Bold" VerticalAlignment="Center" />
+                    <Border Background="#E4E4E7" CornerRadius="4" Padding="9,4" Margin="12,1,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="VERSION 0.12.0" FontSize="11" FontWeight="Bold" Foreground="#52525B" />
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="ATTEMPT SPACING" Style="{StaticResource MetricLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBox x:Name="DelaySecondsBox" Text="5" Width="54" Height="34" Padding="8,5" FontSize="13" TextAlignment="Center" VerticalContentAlignment="Center" />
+                    <TextBlock Text="SEC" Style="{StaticResource MetricLabel}" VerticalAlignment="Center" Margin="7,0,0,0" />
+                    <CheckBox x:Name="PreAlertRecoveryBox" Content="Pre-alert recovery" IsChecked="True" VerticalAlignment="Center" Margin="18,0,0,0" FontSize="12" />
+                </StackPanel>
+            </Grid>
+
+            <Border x:Name="SetupCard" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Grid.ColumnSpan="2" Text="1  Choose a server" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,18" />
+
+                    <TextBlock Grid.Row="1" Text="ASA FAVORITES" Style="{StaticResource FieldLabel}" />
+                    <Grid Grid.Row="1" Grid.Column="1">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <ComboBox x:Name="FavoritesBox" MinWidth="430" SelectionChanged="FavoritesBox_OnSelectionChanged" />
+                        <Button Grid.Column="1" x:Name="UseFavoriteButton" Content="USE FAVORITE" Margin="10,0,0,0" Click="UseFavorite_OnClick" />
+                        <Button Grid.Column="2" Content="REFRESH LIST" Margin="10,0,0,0" Click="Detect_OnClick" />
+                    </Grid>
+
+                    <TextBlock Grid.Row="2" Text="FOUND LOCALLY" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="DetectedText" Foreground="{StaticResource MutedBrush}" Margin="0,12" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="3" Text="SERVER NAME" Style="{StaticResource FieldLabel}" />
+                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="ServerNameBox" Margin="0,5" TextChanged="Target_OnChanged" />
+
+                    <TextBlock Grid.Row="4" Text="GAME ADDRESS" Style="{StaticResource FieldLabel}" />
+                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="AddressBox" Margin="0,5" TextChanged="Target_OnChanged" />
+
+                    <TextBlock Grid.Row="5" Text="ADDRESS SOURCE" Style="{StaticResource FieldLabel}" />
+                    <Grid Grid.Row="5" Grid.Column="1" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="AddressSourceText" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" Text="Automatically resolved from ASA's public server directory." />
+                        <Button Grid.Column="1" x:Name="LookupButton" Content="REFRESH ADDRESS" Margin="10,0,0,0" Click="Lookup_OnClick" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border x:Name="SelectedServerCard" Grid.Row="1" Visibility="Collapsed" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="SELECTED SERVER" Style="{StaticResource FieldLabel}" Margin="0,0,18,0" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock x:Name="SelectedServerNameText" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SelectedServerEndpointText" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="CHANGE" MinHeight="36" Padding="14,7" Click="ChangeServer_OnClick" />
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="2" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Button x:Name="StartButton" Content="GO" ToolTip="Global shortcut: Ctrl+G" Height="58" Background="#15803D" Foreground="White" BorderThickness="0" FontSize="16" Click="Start_OnClick">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="GoBackground" Background="{TemplateBinding Background}" CornerRadius="4">
+                                <TextBlock Text="{TemplateBinding Content}" Foreground="White" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="GoBackground" Property="Background" Value="#166534" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="GoBackground" Property="Background" Value="#71717A" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <Button Grid.Column="1" x:Name="StopButton" Content="STOP" ToolTip="Global shortcut: Ctrl+G" Height="58" Margin="12,0,0,0" Background="#BE123C" BorderThickness="0" FontSize="16" IsEnabled="False" Click="Stop_OnClick">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="StopBackground" Background="{TemplateBinding Background}" CornerRadius="4">
+                                <TextBlock x:Name="StopLabel" Text="{TemplateBinding Content}" Foreground="White" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="StopBackground" Property="Background" Value="#9F1239" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="StopBackground" Property="Background" Value="#A1A1AA" />
+                                    <Setter TargetName="StopLabel" Property="Foreground" Value="#3F3F46" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+
+            <StackPanel Visibility="Collapsed">
+                <TextBlock x:Name="StateText"/><TextBlock x:Name="TargetText"/><TextBlock x:Name="SimilarityText"/><TextBlock x:Name="NextAttemptText"/>
+            </StackPanel>
+
+            <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <UniformGrid Rows="1" Columns="3" Margin="0,0,12,0">
+                            <Border Background="#F4F4F5" CornerRadius="6" Padding="14,10" Margin="0,0,8,0">
+                                <StackPanel><TextBlock Text="Attempts" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="AttemptsText" Text="0" FontSize="22" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+                            </Border>
+                            <Border Background="#F4F4F5" CornerRadius="6" Padding="14,10" Margin="0,0,8,0">
+                                <StackPanel><TextBlock Text="Avg sec / attempt" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="AverageAttemptSecondsText" Text="—" FontSize="22" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+                            </Border>
+                            <Border Background="#F4F4F5" CornerRadius="6" Padding="14,10">
+                                <StackPanel><TextBlock Text="Loading globes" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="LoadingGlobesText" Text="0" FontSize="22" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <Button Grid.Column="1" x:Name="CopyLogsButton" Content="COPY LOGS" MinHeight="36" Padding="14,6" FontSize="11" VerticalAlignment="Center" Click="CopyLogs_OnClick" />
+                    </Grid>
+                    <StackPanel>
+                        <Border Background="#FAFAFA" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12,9" Margin="0,0,0,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,18,0">
+                                    <TextBlock Text="Delay performance" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Text="All-time loading-globe yield" Style="{StaticResource MetricLabel}" Margin="0,3,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" x:Name="DelayPerformancePanel" Orientation="Horizontal" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="Latest ASA screen" Style="{StaticResource MetricLabel}" Margin="0,0,0,7" />
+                        <local:AspectRatioBorder x:Name="ScreenPreviewBorder" AspectRatio="1.7777778" Background="#18181B" BorderBrush="#D4D4D8" BorderThickness="1" CornerRadius="5" ClipToBounds="True">
+                            <Grid>
+                                <Image x:Name="ScreenPreview" Stretch="Uniform" />
+                                <TextBlock x:Name="PreviewPlaceholder" Text="Preview appears while running" Foreground="#A1A1AA" FontSize="12" TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20" />
+                            </Grid>
+                        </local:AspectRatioBorder>
+                        <TextBlock x:Name="PreviewTimeText" Text="NO CAPTURE YET" Style="{StaticResource MetricLabel}" Margin="0,7,0,12" />
+                        <TextBox x:Name="ActivityBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="170" BorderThickness="0" Background="White" Foreground="{StaticResource InkBrush}" FontFamily="Consolas" FontSize="11" />
+                        <TextBlock Text="Session captures" Style="{StaticResource MetricLabel}" Margin="0,14,0,7" />
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Height="180" Background="#F4F4F5" Padding="8">
+                            <StackPanel x:Name="EvidenceStrip" Orientation="Horizontal" />
+                        </ScrollViewer>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</Window>

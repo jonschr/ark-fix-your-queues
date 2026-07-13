@@ -1,0 +1,12 @@
+bin/
+obj/
+.vs/
+.dotnet-home/
+*.user
+*.suo
+artifacts-local/
+release/
+tools/*.png
+tools/*.jpg
+tools/*.jpeg
+tools/*.mp4
