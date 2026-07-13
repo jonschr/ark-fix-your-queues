@@ -17,8 +17,6 @@
     <Compile Remove="RetryController.cs" />
     <Compile Remove="ServerTarget.cs" />
     <Compile Remove="AsaLocalDiscovery.cs" />
-    <Compile Remove="MainForm.cs" />
-    <Compile Remove="Program.cs" />
     <ProjectReference Include="..\ArkFixYourQueues.Core\ArkFixYourQueues.Core.csproj" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
   </ItemGroup>
