@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="830" viewBox="0 0 1200 830" role="img" aria-labelledby="title desc">
+  <title id="title">ARK Join Assist click-coordinate map</title>
+  <desc id="desc">Three normalized sixteen by nine screens show the fixed click positions used on title and main menus, the session browser, and failure dialogs.</desc>
+  <defs>
+    <style>
+      .screen { fill:#f4f4f5; stroke:#3f3f46; stroke-width:2; }
+      .safe { fill:none; stroke:#a1a1aa; stroke-width:1; stroke-dasharray:6 5; }
+      .label { font:600 18px 'Segoe UI',sans-serif; fill:#18181b; }
+      .small { font:14px 'Segoe UI',sans-serif; fill:#52525b; }
+      .point { fill:#2563eb; stroke:white; stroke-width:3; }
+      .error { fill:#be123c; stroke:white; stroke-width:3; }
+      .line { stroke:#71717a; stroke-width:1.5; }
+    </style>
+  </defs>
+  <rect width="1200" height="830" fill="white"/>
+
+  <text x="40" y="40" class="label">Fixed click points inside the centered 16:9 design viewport</text>
+  <text x="40" y="64" class="small">Coordinates are normalized: (0,0) is top-left and (1,1) is bottom-right.</text>
+
+  <text x="40" y="105" class="label">Title / main menu</text>
+  <rect x="40" y="125" width="520" height="292.5" rx="5" class="screen"/>
+  <circle cx="300" cy="357.5" r="9" class="point"/>
+  <line x1="300" y1="357.5" x2="380" y2="375" class="line"/>
+  <text x="386" y="381" class="small">PRESS TO START (0.500, 0.795)</text>
+  <circle cx="241.2" cy="276.2" r="9" class="point"/>
+  <line x1="241.2" y1="276.2" x2="325" y2="245" class="line"/>
+  <text x="330" y="242" class="small">JOIN GAME (0.387, 0.517)</text>
+
+  <text x="640" y="105" class="label">Session browser</text>
+  <rect x="640" y="125" width="520" height="292.5" rx="5" class="screen"/>
+  <circle cx="685.2" cy="362.2" r="9" class="point"/>
+  <line x1="685.2" y1="362.2" x2="730" y2="385" class="line"/>
+  <text x="735" y="391" class="small">BACK (0.087, 0.811)</text>
+  <circle cx="1103.3" cy="365.7" r="9" class="point"/>
+  <line x1="1103.3" y1="365.7" x2="1000" y2="340" class="line"/>
+  <text x="825" y="337" class="small">JOIN LAST PLAYED (0.891, 0.823)</text>
+
+  <text x="40" y="475" class="label">Centered failure dialogs</text>
+  <rect x="40" y="495" width="520" height="292.5" rx="5" class="screen"/>
+  <rect x="232" y="565" width="136" height="150" rx="4" fill="#d4d4d8" stroke="#71717a"/>
+  <circle cx="300" cy="674" r="9" class="error"/>
+  <line x1="300" y1="674" x2="115" y2="650" class="line"/>
+  <text x="58" y="645" class="small">OK (0.500, 0.612)</text>
+  <circle cx="330.2" cy="692.4" r="9" class="error"/>
+  <line x1="330.2" y1="692.4" x2="430" y2="665" class="line"/>
+  <text x="435" y="660" class="small">CANCEL (0.558, 0.675)</text>
+  <text x="640" y="525" class="label">Network-failure safe dismiss</text>
+  <text x="640" y="555" class="small">The loop clicks (0.545, 0.675). It is inside the single ACCEPT</text>
+  <text x="640" y="579" class="small">variant and lands on CANCEL in the two-button full-server variant.</text>
+  <text x="640" y="620" class="small">Clicks use the ASA window rectangle. If another window covers ASA, the</text>
+  <text x="640" y="644" class="small">screen capture sees that covering window and classification should fail;</text>
+  <text x="640" y="668" class="small">keep ASA visible while the workflow runs.</text>
+</svg>

@@ -1,9 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
-using System.IO;
 using System.Media;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -31,15 +29,10 @@ public partial class MainWindow : Window
     [DllImport("gdi32.dll")]
     private static extern bool DeleteObject(IntPtr handle);
 
-    private enum JoinWorkflowPhase { Idle, Starting, WaitingForMainMenu, WaitingForSessionBrowser, FilteringServer, WaitingForJoinResult, WaitingForAttemptReset, WaitingAfterCancel, WaitingAfterBack }
-    private readonly RetryController _controller = new();
-    private readonly AsaServerDirectoryClient _directory = new();
+    private enum JoinWorkflowPhase { Starting, WaitingForMainMenu, WaitingForSessionBrowser, WaitingForJoinResult, WaitingForAttemptReset, WaitingAfterCancel, WaitingAfterBack }
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private Process? _ark;
-    private Bitmap? _baseline;
-    private ServerTarget? _server;
     private int _attemptCount;
-    private string? _lastStatus;
     private DateTimeOffset? _lastJoinAttemptAt;
     private double _attemptIntervalSeconds;
     private int _attemptIntervalCount;
@@ -51,7 +44,6 @@ public partial class MainWindow : Window
     private bool _inactivityAlertPlayed;
     private DateTimeOffset _nextRecoveryScanAt;
     private int _attemptSpacingSeconds;
-    private double _previewAspectRatio = 16d / 9d;
     private bool _preAlertRecoveryEnabled = true;
     private HwndSource? _windowSource;
     private bool _toggleHotkeyRegistered;
@@ -59,7 +51,6 @@ public partial class MainWindow : Window
     private string? _activeErrorEvidence;
     private int _evidenceSequence;
     private DateTimeOffset? _loadingGlobeSince;
-    private BitmapSource? _latestScreenSource;
     private DateTimeOffset? _networkDismissalAttemptAt;
     private int _networkDismissalAttemptCount;
     private bool _networkDismissalLimitReported;
@@ -74,9 +65,6 @@ public partial class MainWindow : Window
         _timer.Tick += (_, _) => TickController();
         Loaded += (_, _) =>
         {
-            SetupCard.Visibility = Visibility.Collapsed;
-            SelectedServerCard.Visibility = Visibility.Collapsed;
-            TargetText.Text = "ASA Join Last Played";
             RenderDelayPerformance();
             Log("Ready. ASA's Join Last Played server will be used; no app-side server selection is required.");
             _ = CheckForUpdateAsync();
@@ -86,9 +74,8 @@ public partial class MainWindow : Window
             if (_toggleHotkeyRegistered && _windowSource is not null)
                 UnregisterHotKey(_windowSource.Handle, ToggleHotkeyId);
             _windowSource?.RemoveHook(WindowMessageHook);
-            _timer.Stop(); _baseline?.Dispose(); _controller.Stop();
+            _timer.Stop();
             ScreenPreview.Source = null;
-            _latestScreenSource = null;
             EvidenceStrip.Children.Clear();
             if (_pendingUpdate is not null) UpdateService.TryLaunchOnExit(_pendingUpdate);
             Application.Current.Shutdown();
@@ -130,113 +117,6 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
-    private async void Detect_OnClick(object sender, RoutedEventArgs e) => await DetectLocalServers();
-
-    private async Task DetectLocalServers()
-    {
-        var saved = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            "Steam", "steamapps", "common", "ARK Survival Ascended", "ShooterGame", "Saved");
-        var last = AsaLocalDiscovery.FindLastJoined([Path.Combine(saved, "Config", "Windows", "GameUserSettings.ini")]);
-        var favorites = AsaLocalDiscovery.FindFavorites([Path.Combine(saved, "SaveGames", "MenuPlayerLocalData.arkprofile.sav")]);
-        var cached = LocalPreferences.Load();
-
-        FavoritesBox.ItemsSource = favorites;
-        if (last is not null)
-        {
-            ServerNameBox.Text = last.Name;
-            FavoritesBox.SelectedItem = favorites.FirstOrDefault(x => x.Name.Equals(last.Name, StringComparison.OrdinalIgnoreCase));
-        }
-        if (cached.ServerName?.Equals(ServerNameBox.Text, StringComparison.OrdinalIgnoreCase) == true && !string.IsNullOrWhiteSpace(cached.Endpoint))
-        {
-            AddressBox.Text = cached.Endpoint;
-            Log("Loaded the previously confirmed game address automatically.");
-        }
-        DetectedText.Text = last is null
-            ? $"Found {favorites.Count} in-game favorite(s). Choose one below."
-            : $"Last joined: {last.Name}  •  {favorites.Count} in-game favorite(s) found";
-        if (FavoritesBox.SelectedItem is AsaFavoriteServer selected)
-        {
-            await ResolveAddress(selected);
-            if (!string.IsNullOrWhiteSpace(AddressBox.Text)) CommitServerSelection();
-        }
-    }
-
-    private void FavoritesBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e) =>
-        UseFavoriteButton.IsEnabled = FavoritesBox.SelectedItem is AsaFavoriteServer;
-
-    private async void UseFavorite_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (FavoritesBox.SelectedItem is not AsaFavoriteServer favorite) return;
-        ServerNameBox.Text = favorite.Name;
-        var cached = LocalPreferences.Load();
-        AddressBox.Text = cached.ServerName?.Equals(favorite.Name, StringComparison.OrdinalIgnoreCase) == true ? cached.Endpoint ?? "" : "";
-        if (string.IsNullOrWhiteSpace(AddressBox.Text)) await ResolveAddress(favorite);
-        else Log($"Selected {favorite.Name} and loaded its saved address.");
-        if (!string.IsNullOrWhiteSpace(AddressBox.Text)) CommitServerSelection();
-    }
-
-    private void CommitServerSelection()
-    {
-        SelectedServerNameText.Text = ServerNameBox.Text;
-        SelectedServerEndpointText.Text = AddressBox.Text;
-        SetupCard.Visibility = Visibility.Collapsed;
-        SelectedServerCard.Visibility = Visibility.Visible;
-    }
-
-    private void ChangeServer_OnClick(object sender, RoutedEventArgs e)
-    {
-        SelectedServerCard.Visibility = Visibility.Collapsed;
-        SetupCard.Visibility = Visibility.Visible;
-    }
-
-    private async void Lookup_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (FavoritesBox.SelectedItem is not AsaFavoriteServer favorite)
-        {
-            MessageBox.Show(this, "Choose an ASA favorite first. You can still type a game address manually.", "Address lookup");
-            return;
-        }
-        await ResolveAddress(favorite);
-    }
-
-    private async Task ResolveAddress(AsaFavoriteServer favorite)
-    {
-        LookupButton.IsEnabled = false;
-        LookupButton.Content = "RESOLVING…";
-        AddressSourceText.Text = "Checking ASA's public server directory…";
-        try
-        {
-            _server = await _directory.ResolveAsync(favorite.Name, favorite.Official, CancellationToken.None);
-            AddressBox.Text = _server.Endpoint;
-            TargetText.Text = $"{_server.DisplayName}\n{_server.Endpoint}";
-            SavePreferences();
-            AddressSourceText.Text = "Resolved automatically from ASA's public server directory. Manual override is available above.";
-            Log($"ASA directory resolved the game address automatically: {_server.Endpoint}");
-        }
-        catch (Exception error)
-        {
-            AddressSourceText.Text = "Automatic resolution failed. Enter a game address manually or try Refresh Address again.";
-            Log($"Automatic address lookup failed: {error.Message}");
-        }
-        finally { LookupButton.IsEnabled = true; LookupButton.Content = "REFRESH ADDRESS"; }
-    }
-
-    private void Target_OnChanged(object sender, TextChangedEventArgs e) => ResolveTarget(false);
-
-    private bool ResolveTarget(bool showError)
-    {
-        if (ServerTarget.TryParse(AddressBox.Text, ServerNameBox.Text, out var target, out var error))
-        {
-            _server = target;
-            TargetText.Text = $"{target!.DisplayName}\n{target.Endpoint}";
-            return true;
-        }
-        _server = null;
-        TargetText.Text = string.IsNullOrWhiteSpace(AddressBox.Text) ? "Address required" : "Invalid address";
-        if (showError) MessageBox.Show(this, error, "Game address required");
-        return false;
-    }
-
     private void Start_OnClick(object sender, RoutedEventArgs e)
     {
         if (!int.TryParse(DelaySecondsBox.Text.Trim(), out _attemptSpacingSeconds) || _attemptSpacingSeconds is < 0 or > 300)
@@ -254,11 +134,10 @@ public partial class MainWindow : Window
             MessageBox.Show(this, "ASA is running, but Windows would not activate its game window.", "Could not activate ASA");
             return;
         }
-        _baseline?.Dispose(); _baseline = null; _attemptCount = 0;
+        _attemptCount = 0;
         _networkDismissalAttemptAt = null; _networkDismissalAttemptCount = 0; _networkDismissalLimitReported = false;
         _lastJoinAttemptAt = null; _attemptIntervalSeconds = 0; _attemptIntervalCount = 0;
-        AttemptsText.Text = "0"; AverageAttemptSecondsText.Text = "—"; SimilarityText.Text = "—";
-        _controller.Start(10, DateTimeOffset.Now);
+        AttemptsText.Text = "0"; AverageAttemptSecondsText.Text = "—";
         SetRunning(true);
         _phase = JoinWorkflowPhase.Starting;
         MarkWorkflowProgress(DateTimeOffset.Now);
@@ -305,6 +184,7 @@ public partial class MainWindow : Window
             MarkWorkflowProgress(now);
             _phase = JoinWorkflowPhase.WaitingAfterCancel;
             _nextWorkflowAction = now.AddMilliseconds(650);
+            _phaseDeadline = now.AddSeconds(12);
         }
 
         if (isNetworkFailure) CaptureErrorEvidence("Network failure / server full", screen);
@@ -340,7 +220,7 @@ public partial class MainWindow : Window
         if (_preAlertRecoveryEnabled && now >= _nextRecoveryScanAt)
         {
             _nextRecoveryScanAt = now.AddSeconds(5);
-                if (TryPreAlertRecovery(now, isNetworkFailure, isOkFailure, isModal, isStartup, isMainMenu)) return;
+            if (TryPreAlertRecovery(now, isNetworkFailure, isOkFailure, isModal)) return;
             if (_phase != JoinWorkflowPhase.WaitingForJoinResult)
                 Log("Recovery scan found no safe known action; the next scan will run in 5 seconds.");
         }
@@ -356,25 +236,29 @@ public partial class MainWindow : Window
             if (isNetworkFailure)
             {
                 DismissNetworkFailure(now, "Network-failure dialog detected");
-                RenderWorkflow(); return;
+                return;
             }
             else if (isOkFailure)
             {
                 if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .612)) { Stop("Could not click OK on the joining-failed dialog."); return; }
                 Log("Joining-failed dialog detected; clicked OK.");
                 MarkWorkflowProgress(now);
-                _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650);
-                RenderWorkflow(); return;
+                _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
+                return;
             }
             else if (isModal)
             {
                 if (!WindowsInterop.ClickWindowDesignRelative(_ark, .558, .675)) { Stop("Could not click CANCEL on the connection modal."); return; }
                 Log("Connection/full modal detected; clicked CANCEL.");
                 MarkWorkflowProgress(now);
-                _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650);
-                RenderWorkflow(); return;
+                _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
+                return;
             }
-            if (_phase == JoinWorkflowPhase.WaitingForJoinResult && now >= _phaseDeadline)
+        }
+
+        if (_phase == JoinWorkflowPhase.WaitingForJoinResult)
+        {
+            if (now >= _phaseDeadline)
             {
                 if (isSessions)
                 {
@@ -391,16 +275,27 @@ public partial class MainWindow : Window
                     _phaseDeadline = now.AddSeconds(Math.Max(1, _attemptSpacingSeconds));
                 }
             }
-            RenderWorkflow(); return;
+            return;
         }
 
-        if (now < _nextWorkflowAction) { RenderWorkflow(); return; }
+        if (now < _nextWorkflowAction) return;
         switch (_phase)
         {
             case JoinWorkflowPhase.WaitingForAttemptReset:
-                if (isSessions)
+            case JoinWorkflowPhase.WaitingAfterCancel:
+                if (isNetworkFailure || isOkFailure || isModal)
                 {
                     _nextWorkflowAction = now.AddMilliseconds(250);
+                    break;
+                }
+                if (isSessions)
+                {
+                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .087, .811)) { Stop("Could not click BACK after clearing the attempt."); return; }
+                    Log("Attempt cleared; clicked BACK.");
+                    MarkWorkflowProgress(now);
+                    _phase = JoinWorkflowPhase.WaitingAfterBack;
+                    _nextWorkflowAction = now.AddMilliseconds(250);
+                    _phaseDeadline = now.AddSeconds(12);
                     break;
                 }
                 if (isStartup)
@@ -421,7 +316,10 @@ public partial class MainWindow : Window
                     _phase = JoinWorkflowPhase.WaitingForSessionBrowser;
                     _nextWorkflowAction = now.AddMilliseconds(250);
                     _phaseDeadline = now.AddSeconds(12);
+                    break;
                 }
+                if (now >= _phaseDeadline) { Log("Attempt reset is still unresolved; continuing recovery scans."); _phaseDeadline = now.AddSeconds(12); }
+                else _nextWorkflowAction = now.AddMilliseconds(250);
                 break;
             case JoinWorkflowPhase.Starting:
                 if (isNetworkFailure)
@@ -433,14 +331,14 @@ public partial class MainWindow : Window
                     if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .612)) { Stop("Could not click OK on the existing joining-failed dialog."); return; }
                     Log("Dismissed an existing joining-failed dialog.");
                     MarkWorkflowProgress(now);
-                    _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650);
+                    _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
                 }
                 else if (isModal)
                 {
                     if (!WindowsInterop.ClickWindowDesignRelative(_ark, .558, .675)) { Stop("Could not cancel the existing connection modal."); return; }
                     Log("Cancelled an existing connection modal.");
                     MarkWorkflowProgress(now);
-                    _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650);
+                    _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
                 }
                 else if (isSessions) ClickJoinLastPlayed(now);
                 else if (isStartup)
@@ -486,12 +384,6 @@ public partial class MainWindow : Window
                 else if (now >= _phaseDeadline) { Log("Session browser is still unresolved; continuing recovery scans."); _phaseDeadline = now.AddSeconds(12); }
                 else _nextWorkflowAction = now.AddMilliseconds(250);
                 break;
-            case JoinWorkflowPhase.WaitingAfterCancel:
-                if (!WindowsInterop.ClickWindowDesignRelative(_ark, .087, .811)) { Stop("Could not click BACK."); return; }
-                Log("Clicked BACK.");
-                MarkWorkflowProgress(now);
-                _phase = JoinWorkflowPhase.WaitingAfterBack; _nextWorkflowAction = now.AddMilliseconds(250); _phaseDeadline = now.AddSeconds(12);
-                break;
             case JoinWorkflowPhase.WaitingAfterBack:
                 if (isStartup)
                 {
@@ -515,7 +407,6 @@ public partial class MainWindow : Window
                 _phase = JoinWorkflowPhase.WaitingForSessionBrowser; _nextWorkflowAction = now.AddMilliseconds(250); _phaseDeadline = now.AddSeconds(12);
                 break;
         }
-        RenderWorkflow();
     }
 
     private void ClickJoinLastPlayed(DateTimeOffset now)
@@ -569,7 +460,7 @@ public partial class MainWindow : Window
         _nextRecoveryScanAt = now.AddSeconds(4);
     }
 
-    private bool TryPreAlertRecovery(DateTimeOffset now, bool isNetworkFailure, bool isOkFailure, bool isModal, bool isStartup, bool isMainMenu)
+    private bool TryPreAlertRecovery(DateTimeOffset now, bool isNetworkFailure, bool isOkFailure, bool isModal)
     {
         if (_ark is null) return false;
         if (isNetworkFailure)
@@ -583,6 +474,7 @@ public partial class MainWindow : Window
             MarkWorkflowProgress(now);
             _phase = JoinWorkflowPhase.WaitingAfterCancel;
             _nextWorkflowAction = now.AddMilliseconds(650);
+            _phaseDeadline = now.AddSeconds(12);
             return true;
         }
         if (isModal)
@@ -592,6 +484,7 @@ public partial class MainWindow : Window
             MarkWorkflowProgress(now);
             _phase = JoinWorkflowPhase.WaitingAfterCancel;
             _nextWorkflowAction = now.AddMilliseconds(650);
+            _phaseDeadline = now.AddSeconds(12);
             return true;
         }
         // Never navigate menus speculatively while ASA is resolving a join. The
@@ -640,78 +533,29 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void RenderWorkflow()
-    {
-        StateText.Text = _phase switch
-        {
-            JoinWorkflowPhase.WaitingForJoinResult => "WAITING FOR RESULT",
-            JoinWorkflowPhase.WaitingForAttemptReset => "RESETTING ATTEMPT",
-            JoinWorkflowPhase.FilteringServer => "SELECTING SERVER",
-            JoinWorkflowPhase.WaitingAfterCancel or JoinWorkflowPhase.WaitingAfterBack => "RESETTING MENU",
-            _ => "NAVIGATING ASA"
-        };
-        NextAttemptText.Text = _phase.ToString();
-    }
-
-    private void RenderState(DateTimeOffset now)
-    {
-        var focused = _ark is not null && !_ark.HasExited && WindowsInterop.IsArkForeground(_ark);
-        StateText.Text = _controller.State switch
-        {
-            RetryState.Arming when !focused => "RETURN TO ASA", RetryState.Arming => "CALIBRATING",
-            RetryState.Ready when !focused => "PAUSED", RetryState.Ready => "READY",
-            RetryState.Cooldown => "WAITING", RetryState.PausedForLoading => "JOINING / PAUSED", _ => "STOPPED"
-        };
-        NextAttemptText.Text = _controller.State is RetryState.Cooldown or RetryState.Arming
-            ? $"{Math.Max(0, Math.Ceiling((_controller.NextAttemptAt - now).TotalSeconds))}s" : "paused";
-        if (_lastStatus != StateText.Text)
-        {
-            _lastStatus = StateText.Text;
-            DiagnosticLog.Write($"state={_controller.State} display={_lastStatus} asaForeground={focused}");
-        }
-    }
-
     private void Stop(string reason)
     {
-        _timer.Stop(); _controller.Stop(); _baseline?.Dispose(); _baseline = null;
-        SetRunning(false); StateText.Text = "STOPPED"; NextAttemptText.Text = "—"; Log(reason);
-    }
-
-    private void CompleteJoin(string message)
-    {
-        _phase = JoinWorkflowPhase.Idle;
         _timer.Stop();
-        _controller.Stop();
-        _baseline?.Dispose();
-        _baseline = null;
         SetRunning(false);
-        StateText.Text = "JOINING / LOADING";
-        NextAttemptText.Text = "stopped safely";
-        Log(message);
+        Log(reason);
     }
 
     private void SetRunning(bool running)
     {
-        FavoritesBox.IsEnabled = UseFavoriteButton.IsEnabled = ServerNameBox.IsEnabled = AddressBox.IsEnabled =
-            LookupButton.IsEnabled = !running;
         DelaySecondsBox.IsEnabled = !running;
         PreAlertRecoveryBox.IsEnabled = !running;
         StartButton.IsEnabled = !running; StopButton.IsEnabled = running;
-        SetupCard.Visibility = Visibility.Collapsed;
-        SelectedServerCard.Visibility = Visibility.Collapsed;
     }
 
     private void UpdateScreenPreview(Bitmap screen)
     {
-        _previewAspectRatio = screen.Width / (double)screen.Height;
-        ScreenPreviewBorder.AspectRatio = _previewAspectRatio;
+        ScreenPreviewBorder.AspectRatio = screen.Width / (double)screen.Height;
         var handle = screen.GetHbitmap();
         try
         {
             var source = Imaging.CreateBitmapSourceFromHBitmap(
                 handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
             source.Freeze();
-            _latestScreenSource = source;
             ScreenPreview.Source = source;
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
             PreviewTimeText.Text = $"CAPTURED {DateTime.Now:T}";
@@ -844,12 +688,6 @@ public partial class MainWindow : Window
             return source;
         }
         finally { DeleteObject(handle); }
-    }
-
-    private void SavePreferences()
-    {
-        if (_server is null) return;
-        new LocalPreferences(_server.DisplayName, _server.Endpoint, 10).Save();
     }
 
     private async void CopyLogs_OnClick(object sender, RoutedEventArgs e)

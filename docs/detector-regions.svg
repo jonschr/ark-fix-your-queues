@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Screen detector regions used by ARK Join Assist</title>
+  <desc id="desc">Six miniature sixteen by nine screens show the regions inspected for startup, main menu, session browser, failure dialogs, loading globe, and aspect ratio normalization.</desc>
+  <defs>
+    <style>
+      .screen { fill:#f4f4f5; stroke:#3f3f46; stroke-width:2; }
+      .region { fill:#2563eb; fill-opacity:.28; stroke:#2563eb; stroke-width:2; }
+      .button { fill:#f97316; fill-opacity:.42; stroke:#c2410c; stroke-width:2; }
+      .dark { fill:#18181b; fill-opacity:.18; stroke:#52525b; stroke-width:2; }
+      .crop { fill:#a1a1aa; fill-opacity:.35; }
+      .label { font:600 17px 'Segoe UI',sans-serif; fill:#18181b; }
+      .small { font:13px 'Segoe UI',sans-serif; fill:#52525b; }
+    </style>
+  </defs>
+  <rect width="1200" height="760" fill="white"/>
+  <text x="35" y="38" class="label">Color-density regions sampled every 250 ms</text>
+  <text x="35" y="61" class="small">These are geometric/color tests. The app does not read button text or use OCR.</text>
+
+  <g transform="translate(35,95)">
+    <text x="0" y="0" class="label">Startup</text>
+    <rect x="0" y="18" width="350" height="196.875" rx="4" class="screen"/>
+    <rect x="136.5" y="163.7" width="77" height="17.7" class="region"/>
+    <text x="0" y="238" class="small">Blue ≥ 28% in x 39–61%, y 74–83%</text>
+  </g>
+
+  <g transform="translate(425,95)">
+    <text x="0" y="0" class="label">Main menu</text>
+    <rect x="0" y="18" width="350" height="196.875" rx="4" class="screen"/>
+    <rect x="98" y="67.2" width="154" height="96.5" class="region"/>
+    <text x="0" y="238" class="small">Blue ≥ 32% in x 28–72%, y 25–74%</text>
+  </g>
+
+  <g transform="translate(815,95)">
+    <text x="0" y="0" class="label">Session browser</text>
+    <rect x="0" y="18" width="350" height="196.875" rx="4" class="screen"/>
+    <rect x="287" y="175.5" width="56" height="19.7" class="button"/>
+    <text x="0" y="238" class="small">Orange ≥ 18% in x 82–98%, y 80–90%</text>
+  </g>
+
+  <g transform="translate(35,395)">
+    <text x="0" y="0" class="label">Failure dialogs</text>
+    <rect x="0" y="18" width="350" height="196.875" rx="4" class="screen"/>
+    <rect x="129.5" y="67.2" width="91" height="96.5" class="region"/>
+    <rect x="140" y="144" width="70" height="13.8" class="button"/>
+    <rect x="164.5" y="144" width="21" height="13.8" class="dark"/>
+    <text x="0" y="238" class="small">Central blue panel + lower button geometry</text>
+  </g>
+
+  <g transform="translate(425,395)">
+    <text x="0" y="0" class="label">Loading globe</text>
+    <rect x="0" y="18" width="350" height="196.875" rx="4" fill="#18181b" stroke="#3f3f46" stroke-width="2"/>
+    <circle cx="175" cy="116" r="42" fill="#7e22ce" fill-opacity=".5" stroke="#7e22ce" stroke-width="2"/>
+    <circle cx="193" cy="99" r="5" fill="white"/>
+    <text x="0" y="238" class="small">Whole viewport: ≥68% dark + purple + bright</text>
+  </g>
+
+  <g transform="translate(815,395)">
+    <text x="0" y="0" class="label">Aspect normalization</text>
+    <rect x="0" y="18" width="350" height="196.875" rx="4" class="screen"/>
+    <rect x="0" y="18" width="38" height="196.875" class="crop"/>
+    <rect x="312" y="18" width="38" height="196.875" class="crop"/>
+    <rect x="38" y="18" width="274" height="196.875" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="0" y="238" class="small">Ultrawide sides or tall-screen bars are ignored</text>
+  </g>
+
+  <text x="35" y="716" class="small">Blue means blue-dominant pixels; orange means red/orange-dominant pixels. Exact thresholds are documented in the README table.</text>
+</svg>

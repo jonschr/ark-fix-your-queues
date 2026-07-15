@@ -10,8 +10,6 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Grid Margin="0,0,0,18">
@@ -30,54 +28,7 @@
                 </StackPanel>
             </Grid>
 
-            <Border x:Name="SetupCard" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,0,0,12">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Grid.ColumnSpan="2" Text="1  Choose a server" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,18" />
-
-                    <TextBlock Grid.Row="1" Text="ASA FAVORITES" Style="{StaticResource FieldLabel}" />
-                    <Grid Grid.Row="1" Grid.Column="1">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <ComboBox x:Name="FavoritesBox" MinWidth="430" SelectionChanged="FavoritesBox_OnSelectionChanged" />
-                        <Button Grid.Column="1" x:Name="UseFavoriteButton" Content="USE FAVORITE" Margin="10,0,0,0" Click="UseFavorite_OnClick" />
-                        <Button Grid.Column="2" Content="REFRESH LIST" Margin="10,0,0,0" Click="Detect_OnClick" />
-                    </Grid>
-
-                    <TextBlock Grid.Row="2" Text="FOUND LOCALLY" Style="{StaticResource FieldLabel}" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="DetectedText" Foreground="{StaticResource MutedBrush}" Margin="0,12" TextWrapping="Wrap" />
-
-                    <TextBlock Grid.Row="3" Text="SERVER NAME" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="ServerNameBox" Margin="0,5" TextChanged="Target_OnChanged" />
-
-                    <TextBlock Grid.Row="4" Text="GAME ADDRESS" Style="{StaticResource FieldLabel}" />
-                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="AddressBox" Margin="0,5" TextChanged="Target_OnChanged" />
-
-                    <TextBlock Grid.Row="5" Text="ADDRESS SOURCE" Style="{StaticResource FieldLabel}" />
-                    <Grid Grid.Row="5" Grid.Column="1" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock x:Name="AddressSourceText" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" Text="Automatically resolved from ASA's public server directory." />
-                        <Button Grid.Column="1" x:Name="LookupButton" Content="REFRESH ADDRESS" Margin="10,0,0,0" Click="Lookup_OnClick" />
-                    </Grid>
-                </Grid>
-            </Border>
-
-            <Border x:Name="SelectedServerCard" Grid.Row="1" Visibility="Collapsed" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,12">
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="SELECTED SERVER" Style="{StaticResource FieldLabel}" Margin="0,0,18,0" />
-                    <StackPanel Grid.Column="1">
-                        <TextBlock x:Name="SelectedServerNameText" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock x:Name="SelectedServerEndpointText" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
-                    </StackPanel>
-                    <Button Grid.Column="2" Content="CHANGE" MinHeight="36" Padding="14,7" Click="ChangeServer_OnClick" />
-                </Grid>
-            </Border>
-
-            <Grid Grid.Row="2" Margin="0,0,0,12">
+            <Grid Grid.Row="1" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <Button x:Name="StartButton" Content="GO" ToolTip="Global shortcut: Ctrl+G" Height="58" Background="#15803D" Foreground="White" BorderThickness="0" FontSize="16" Click="Start_OnClick">
                     <Button.Template>
@@ -118,11 +69,7 @@
                 </Button>
             </Grid>
 
-            <StackPanel Visibility="Collapsed">
-                <TextBlock x:Name="StateText"/><TextBlock x:Name="TargetText"/><TextBlock x:Name="SimilarityText"/><TextBlock x:Name="NextAttemptText"/>
-            </StackPanel>
-
-            <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18">
+            <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18">
                 <DockPanel>
                     <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
