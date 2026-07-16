@@ -32,10 +32,13 @@ public partial class MainWindow : Window
     private enum JoinWorkflowPhase { Starting, WaitingForMainMenu, WaitingForSessionBrowser, WaitingForJoinResult, WaitingForAttemptReset, WaitingAfterCancel, WaitingAfterBack }
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private Process? _ark;
-    private int _attemptCount;
+    private int _runAttemptCount;
+    private int _launchAttemptCount;
     private DateTimeOffset? _lastJoinAttemptAt;
-    private double _attemptIntervalSeconds;
-    private int _attemptIntervalCount;
+    private double _runAttemptIntervalSeconds;
+    private int _runAttemptIntervalCount;
+    private double _launchAttemptIntervalSeconds;
+    private int _launchAttemptIntervalCount;
     private JoinWorkflowPhase _phase;
     private DateTimeOffset _nextWorkflowAction;
     private DateTimeOffset _phaseDeadline;
@@ -54,7 +57,8 @@ public partial class MainWindow : Window
     private DateTimeOffset? _networkDismissalAttemptAt;
     private int _networkDismissalAttemptCount;
     private bool _networkDismissalLimitReported;
-    private int _loadingGlobeCount;
+    private int _runLoadingGlobeCount;
+    private int _launchLoadingGlobeCount;
     private readonly DelayPerformanceStore _delayPerformance = DelayPerformanceStore.Load();
     private PendingUpdate? _pendingUpdate;
 
@@ -134,10 +138,13 @@ public partial class MainWindow : Window
             MessageBox.Show(this, "ASA is running, but Windows would not activate its game window.", "Could not activate ASA");
             return;
         }
-        _attemptCount = 0;
+        _runAttemptCount = 0;
+        _runLoadingGlobeCount = 0;
         _networkDismissalAttemptAt = null; _networkDismissalAttemptCount = 0; _networkDismissalLimitReported = false;
-        _lastJoinAttemptAt = null; _attemptIntervalSeconds = 0; _attemptIntervalCount = 0;
-        AttemptsText.Text = "0"; AverageAttemptSecondsText.Text = "—";
+        _lastJoinAttemptAt = null; _runAttemptIntervalSeconds = 0; _runAttemptIntervalCount = 0;
+        CurrentGoAttemptsText.Text = "0";
+        CurrentGoAverageText.Text = "—";
+        CurrentGoGlobesText.Text = "0";
         SetRunning(true);
         _phase = JoinWorkflowPhase.Starting;
         MarkWorkflowProgress(DateTimeOffset.Now);
@@ -202,8 +209,8 @@ public partial class MainWindow : Window
                 if (!_loadingGlobeCapturedForAttempt)
                 {
                     _loadingGlobeCapturedForAttempt = true;
-                    _loadingGlobeCount++;
-                    LoadingGlobesText.Text = _loadingGlobeCount.ToString();
+                    CurrentGoGlobesText.Text = (++_runLoadingGlobeCount).ToString();
+                    LaunchGlobesText.Text = (++_launchLoadingGlobeCount).ToString();
                     var performance = _delayPerformance.RecordGlobe(_attemptSpacingSeconds);
                     var ratio = performance.Attempts == 0 ? 0 : performance.LoadingGlobes / (double)performance.Attempts;
                     RenderDelayPerformance();
@@ -435,18 +442,23 @@ public partial class MainWindow : Window
         MarkWorkflowProgress(now);
         _loadingGlobeCapturedForAttempt = false;
         _loadingGlobeSince = null;
-        AttemptsText.Text = (++_attemptCount).ToString();
+        CurrentGoAttemptsText.Text = (++_runAttemptCount).ToString();
+        LaunchAttemptsText.Text = (++_launchAttemptCount).ToString();
         _delayPerformance.RecordAttempt(_attemptSpacingSeconds);
         RenderDelayPerformance();
         var attemptAt = DateTimeOffset.Now;
         if (_lastJoinAttemptAt is not null)
         {
-            _attemptIntervalSeconds += (attemptAt - _lastJoinAttemptAt.Value).TotalSeconds;
-            _attemptIntervalCount++;
-            AverageAttemptSecondsText.Text = $"{_attemptIntervalSeconds / _attemptIntervalCount:F1}s";
+            var intervalSeconds = (attemptAt - _lastJoinAttemptAt.Value).TotalSeconds;
+            _runAttemptIntervalSeconds += intervalSeconds;
+            _runAttemptIntervalCount++;
+            _launchAttemptIntervalSeconds += intervalSeconds;
+            _launchAttemptIntervalCount++;
+            CurrentGoAverageText.Text = $"{_runAttemptIntervalSeconds / _runAttemptIntervalCount:F1}s";
+            LaunchAverageText.Text = $"{_launchAttemptIntervalSeconds / _launchAttemptIntervalCount:F1}s";
         }
         _lastJoinAttemptAt = attemptAt;
-        Log($"{action} (attempt {_attemptCount}).");
+        Log($"{action} (attempt {_runAttemptCount} this GO, {_launchAttemptCount} since app launch).");
         _phase = JoinWorkflowPhase.WaitingForJoinResult;
         // ASA's "Joining server..." overlay is not a result and may never clear.
         // The user-configured attempt spacing is the retry deadline.

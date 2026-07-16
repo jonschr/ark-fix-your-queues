@@ -1,6 +1,6 @@
 # ARK Join Assist
 
-Current app version: **0.12.2**
+Current app version: **0.12.3**
 
 A Windows menu helper for ARK: Survival Ascended. Click **GO** or press the global **Ctrl+G** shortcut once and the helper repeatedly tries ASA's last-played server using only the game's visible menus. Press **Ctrl+G** again to stop from anywhere.
 
@@ -128,7 +128,7 @@ The highest-risk assumptions are the orange JOIN LAST PLAYED area, the broad blu
 - **Attempt spacing** enforces 0–300 seconds between every actual join click, including retries after menu recovery. It defaults to 5 seconds.
 - The latest ASA capture is shown full-width above the activity log and preserves the ASA window's original aspect ratio.
 - Recognized error dialogs and confirmed purple-globe loading screens are retained as in-memory screenshot cards in a horizontal session banner, newest first. A globe starts a monitored loading attempt but does not stop the workflow because ASA may still return a post-load server-full error. Ordinary session-browser “loading/joining” messages are not captured. The banner is capped at 60 cards and cleared completely when the app closes; no evidence screenshots are written to disk.
-- The activity summary shows attempts, average seconds per attempt, and loading globes. Loading-globe yield is tracked per configured attempt spacing, persisted across launches, and ranked in a compact all-time delay-performance summary.
+- The activity summary shows attempts, average seconds per attempt, and loading globes in two explicit scopes: the current **GO** session and the lifetime of the currently open app process. Launch-wide average timing pools only intervals between attempts within GO sessions, so stopped time between sessions does not inflate it. Loading-globe yield by configured spacing is tracked separately, persisted across app launches, and ranked in the all-time delay-performance summary.
 - Clicking any session-evidence thumbnail opens a large native-aspect preview.
 - Clicks and classifier regions are mapped through ASA's centered 16:9 safe UI area, improving compatibility between 16:9, ultrawide, windowed, and differently positioned game windows.
 - One second before the inactivity alert, an optional recovery watchdog checks for known OK/Cancel dialogs and takes only positively recognized actions. It repeats every 5 seconds until the workflow progresses, defaults on, and can be disabled before starting.
@@ -144,4 +144,4 @@ dotnet test -c Release
 dotnet publish src\ArkFixYourQueues\ArkFixYourQueues.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
 ```
 
-Pushing a tag such as `v0.12.2` runs `.github/workflows/release.yml`, tests the project, creates the self-contained Windows ZIP and checksum, and publishes both to a GitHub Release. The main WPF application intentionally remains a folder deployment because its earlier single-file build hung on this PC; only the small updater is published as a standalone single file.
+Pushing a tag such as `v0.12.3` runs `.github/workflows/release.yml`, tests the project, creates the self-contained Windows ZIP and checksum, and publishes both to a GitHub Release. The main WPF application intentionally remains a folder deployment because its earlier single-file build hung on this PC; only the small updater is published as a standalone single file.
