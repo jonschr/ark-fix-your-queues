@@ -1,6 +1,6 @@
 # ARK Join Assist
 
-Current app version: **0.12.0**
+Current app version: **0.12.1**
 
 A Windows menu helper for ARK: Survival Ascended. Click **GO** or press the global **Ctrl+G** shortcut once and the helper repeatedly tries ASA's last-played server using only the game's visible menus. Press **Ctrl+G** again to stop from anywhere.
 
@@ -144,4 +144,4 @@ dotnet test -c Release
 dotnet publish src\ArkFixYourQueues\ArkFixYourQueues.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
 ```
 
-Pushing a tag such as `v0.12.0` runs `.github/workflows/release.yml`, tests the project, creates the self-contained Windows ZIP and checksum, and publishes both to a GitHub Release. The main WPF application intentionally remains a folder deployment because its earlier single-file build hung on this PC; only the small updater is published as a standalone single file.
+Pushing a tag such as `v0.12.1` runs `.github/workflows/release.yml`, tests the project, creates the self-contained Windows ZIP and checksum, and publishes both to a GitHub Release. The main WPF application intentionally remains a folder deployment because its earlier single-file build hung on this PC; only the small updater is published as a standalone single file.
