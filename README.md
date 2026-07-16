@@ -1,6 +1,6 @@
 # ARK Join Assist
 
-Current app version: **0.12.1**
+Current app version: **0.12.2**
 
 A Windows menu helper for ARK: Survival Ascended. Click **GO** or press the global **Ctrl+G** shortcut once and the helper repeatedly tries ASA's last-played server using only the game's visible menus. Press **Ctrl+G** again to stop from anywhere.
 
@@ -21,7 +21,7 @@ The download is self-contained for 64-bit Windows. Keep the extracted files toge
 
 The app checks the latest GitHub Release in the background. When a newer version is found, it downloads both the Windows ZIP and its published SHA-256 checksum, verifies the package, and records that the update is ready in the activity log. The app continues running normally.
 
-The verified update installs automatically only after you close the app. A small standalone updater waits for the main process to exit, replaces the installation files, and restarts the new version. Local settings and delay-performance history are stored under `%LOCALAPPDATA%\ArkFixYourQueues` and are not replaced by updates.
+The verified update installs automatically only after you close the app. A small standalone updater waits for every older app process and transient file lock to clear, replaces the installation files, and restarts the new version. Do not manually relaunch during this swap; the app prevents duplicate running instances. Local settings and delay-performance history are stored under `%LOCALAPPDATA%\ArkFixYourQueues` and are not replaced by updates.
 
 ## What the app mechanically does
 
@@ -144,4 +144,4 @@ dotnet test -c Release
 dotnet publish src\ArkFixYourQueues\ArkFixYourQueues.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
 ```
 
-Pushing a tag such as `v0.12.1` runs `.github/workflows/release.yml`, tests the project, creates the self-contained Windows ZIP and checksum, and publishes both to a GitHub Release. The main WPF application intentionally remains a folder deployment because its earlier single-file build hung on this PC; only the small updater is published as a standalone single file.
+Pushing a tag such as `v0.12.2` runs `.github/workflows/release.yml`, tests the project, creates the self-contained Windows ZIP and checksum, and publishes both to a GitHub Release. The main WPF application intentionally remains a folder deployment because its earlier single-file build hung on this PC; only the small updater is published as a standalone single file.
