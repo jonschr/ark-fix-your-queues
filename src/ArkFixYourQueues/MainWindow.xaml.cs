@@ -50,10 +50,9 @@ public partial class MainWindow : Window
     private bool _preAlertRecoveryEnabled = true;
     private HwndSource? _windowSource;
     private bool _toggleHotkeyRegistered;
-    private bool _loadingGlobeCapturedForAttempt;
+    private bool _loadingGlobeVisible;
     private string? _activeErrorEvidence;
     private int _evidenceSequence;
-    private DateTimeOffset? _loadingGlobeSince;
     private DateTimeOffset? _networkDismissalAttemptAt;
     private int _networkDismissalAttemptCount;
     private bool _networkDismissalLimitReported;
@@ -187,41 +186,41 @@ public partial class MainWindow : Window
             _networkDismissalAttemptAt = null;
             _networkDismissalAttemptCount = 0;
             _networkDismissalLimitReported = false;
-            Log("Network-failure dialog cleared.");
+            Log("Full-server / connection-failed dialog cleared.");
             MarkWorkflowProgress(now);
             _phase = JoinWorkflowPhase.WaitingAfterCancel;
             _nextWorkflowAction = now.AddMilliseconds(650);
             _phaseDeadline = now.AddSeconds(12);
         }
 
-        if (isNetworkFailure) CaptureErrorEvidence("Network failure / server full", screen);
+        if (isNetworkFailure) CaptureErrorEvidence("Full server / connection failed", screen);
         else if (isOkFailure) CaptureErrorEvidence("Connection timeout", screen);
         else if (isModal) CaptureErrorEvidence("Connection / server full", screen);
         else _activeErrorEvidence = null;
 
-        var canBeLoading = _phase == JoinWorkflowPhase.WaitingForJoinResult && isLoadingGlobe &&
+        var canBeLoading = isLoadingGlobe &&
                            !isNetworkFailure && !isOkFailure && !isModal && !isSessions && !isStartup && !isMainMenu;
         if (canBeLoading)
         {
-            _loadingGlobeSince ??= now;
-            if (now - _loadingGlobeSince >= TimeSpan.FromSeconds(2.5))
+            // A globe can appear late, after one or more retry transitions. Count
+            // the screen transition into it, not timer ticks and not join clicks:
+            // it must disappear for at least one capture before another globe is
+            // considered a new loading event.
+            if (!_loadingGlobeVisible)
             {
-                if (!_loadingGlobeCapturedForAttempt)
-                {
-                    _loadingGlobeCapturedForAttempt = true;
-                    CurrentGoGlobesText.Text = (++_runLoadingGlobeCount).ToString();
-                    LaunchGlobesText.Text = (++_launchLoadingGlobeCount).ToString();
-                    var performance = _delayPerformance.RecordGlobe(_attemptSpacingSeconds);
-                    var ratio = performance.Attempts == 0 ? 0 : performance.LoadingGlobes / (double)performance.Attempts;
-                    RenderDelayPerformance();
-                    AddEvidence("Loading globe", screen);
-                    Log("Loading globe confirmed; retry navigation is suspended while ASA loads or returns a post-load error.");
-                    Log($"Delay optimization: {_attemptSpacingSeconds}s spacing has produced {performance.LoadingGlobes} globe(s) from {performance.Attempts} all-time attempt(s) ({ratio:P1}).");
-                    MarkWorkflowProgress(now);
-                }
+                CurrentGoGlobesText.Text = (++_runLoadingGlobeCount).ToString();
+                LaunchGlobesText.Text = (++_launchLoadingGlobeCount).ToString();
+                var performance = _delayPerformance.RecordGlobe(_attemptSpacingSeconds);
+                var ratio = performance.Attempts == 0 ? 0 : performance.LoadingGlobes / (double)performance.Attempts;
+                RenderDelayPerformance();
+                AddEvidence("Loading globe", screen);
+                Log("Loading globe detected; retry navigation is suspended while ASA loads or returns a post-load error.");
+                Log($"Delay optimization: {_attemptSpacingSeconds}s spacing has produced {performance.LoadingGlobes} globe(s) from {performance.Attempts} all-time attempt(s) ({ratio:P1}).");
+                MarkWorkflowProgress(now);
             }
+            _loadingGlobeVisible = true;
         }
-        else _loadingGlobeSince = null;
+        else _loadingGlobeVisible = false;
 
         var inactiveFor = now - _lastWorkflowProgressAt;
         if (_preAlertRecoveryEnabled && now >= _nextRecoveryScanAt)
@@ -242,7 +241,7 @@ public partial class MainWindow : Window
         {
             if (isNetworkFailure)
             {
-                DismissNetworkFailure(now, "Network-failure dialog detected");
+                DismissNetworkFailure(now, "Full-server / connection-failed dialog detected");
                 return;
             }
             else if (isOkFailure)
@@ -265,21 +264,33 @@ public partial class MainWindow : Window
 
         if (_phase == JoinWorkflowPhase.WaitingForJoinResult)
         {
-            if (now >= _phaseDeadline)
+            // Attempt spacing is deliberately only the post-JOIN wait. ASA can
+            // redraw its "Joining server..." status in several different ways,
+            // so waiting for a particular intermediate frame makes the retry
+            // loop brittle. A recognized result dialog is handled above; absent
+            // one, return through the session browser's BACK control as soon as
+            // the requested post-JOIN delay has elapsed.
+            if (now >= _nextWorkflowAction)
             {
-                if (isSessions)
+                if (isLoadingGlobe)
                 {
-                    if (!WindowsInterop.SendEscape()) { Stop("Could not send Escape when the configured attempt spacing elapsed."); return; }
-                    Log($"Attempt spacing elapsed ({_attemptSpacingSeconds}s); sent Escape once to cancel the pending overlay.");
+                    Log("ASA has entered its loading screen; retry navigation is suspended while it loads or reports an error.");
                     MarkWorkflowProgress(now);
-                    _phase = JoinWorkflowPhase.WaitingForAttemptReset;
-                    _nextWorkflowAction = now.AddMilliseconds(250);
+                    _nextWorkflowAction = now.AddSeconds(5);
                     _phaseDeadline = now.AddSeconds(12);
                 }
                 else
                 {
-                    Log("Join attempt remains off the known menu screens; continuing to watch for loading or an error.");
-                    _phaseDeadline = now.AddSeconds(Math.Max(1, _attemptSpacingSeconds));
+                    // The visible "Joining server..." status is not a cancellable
+                    // dialog. Escape opens ASA's pause menu, which is the wrong
+                    // screen. This known session-browser control is the reliable
+                    // reset path, even if ASA has dimmed or redrawn the list.
+                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .087, .811)) { Stop("Could not click BACK after the configured post-JOIN delay."); return; }
+                    Log($"Post-JOIN delay elapsed ({_attemptSpacingSeconds}s); clicked the session browser BACK control.");
+                    MarkWorkflowProgress(now);
+                    _phase = JoinWorkflowPhase.WaitingAfterBack;
+                    _nextWorkflowAction = now.AddMilliseconds(250);
+                    _phaseDeadline = now.AddSeconds(12);
                 }
             }
             return;
@@ -331,7 +342,7 @@ public partial class MainWindow : Window
             case JoinWorkflowPhase.Starting:
                 if (isNetworkFailure)
                 {
-                    DismissNetworkFailure(now, "Existing network-failure dialog detected");
+                    DismissNetworkFailure(now, "Existing full-server / connection-failed dialog detected");
                 }
                 else if (isOkFailure)
                 {
@@ -440,8 +451,6 @@ public partial class MainWindow : Window
     private void RecordAttempt(string action, DateTimeOffset now)
     {
         MarkWorkflowProgress(now);
-        _loadingGlobeCapturedForAttempt = false;
-        _loadingGlobeSince = null;
         CurrentGoAttemptsText.Text = (++_runAttemptCount).ToString();
         LaunchAttemptsText.Text = (++_launchAttemptCount).ToString();
         _delayPerformance.RecordAttempt(_attemptSpacingSeconds);
@@ -461,8 +470,10 @@ public partial class MainWindow : Window
         Log($"{action} (attempt {_runAttemptCount} this GO, {_launchAttemptCount} since app launch).");
         _phase = JoinWorkflowPhase.WaitingForJoinResult;
         // ASA's "Joining server..." overlay is not a result and may never clear.
-        // The user-configured attempt spacing is the retry deadline.
-        _phaseDeadline = now.AddSeconds(_attemptSpacingSeconds);
+        // The configured delay is only how long we intentionally wait before
+        // taking the session browser's BACK route for the next attempt.
+        _nextWorkflowAction = now.AddSeconds(_attemptSpacingSeconds);
+        _phaseDeadline = _nextWorkflowAction;
     }
 
     private void MarkWorkflowProgress(DateTimeOffset now)
@@ -477,7 +488,7 @@ public partial class MainWindow : Window
         if (_ark is null) return false;
         if (isNetworkFailure)
         {
-            return DismissNetworkFailure(now, "Recovery scan found a network-failure dialog");
+            return DismissNetworkFailure(now, "Recovery scan found a full-server / connection-failed dialog");
         }
         if (isOkFailure)
         {
@@ -520,7 +531,7 @@ public partial class MainWindow : Window
             {
                 _networkDismissalLimitReported = true;
                 SystemSounds.Exclamation.Play();
-                Log("Network-failure dialog remained after two dismiss clicks; stopped clicking and waiting for user attention.");
+                Log("Full-server / connection-failed dialog remained after two dismiss clicks; stopped clicking and waiting for user attention.");
             }
             _nextWorkflowAction = now.AddSeconds(5);
             return true;

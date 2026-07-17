@@ -8,31 +8,6 @@ namespace ArkFixYourQueues;
 internal static class WindowsInterop
 {
     [StructLayout(LayoutKind.Sequential)]
-    private struct Input
-    {
-        public uint Type;
-        public InputUnion Union;
-    }
-
-    // INPUT's native union is 32 bytes on x64 because MOUSEINPUT is its largest member.
-    // SendInput rejects cbSize when this union is allowed to shrink to KEYBDINPUT's size.
-    [StructLayout(LayoutKind.Explicit, Size = 32)]
-    private struct InputUnion
-    {
-        [FieldOffset(0)] public KeyboardInput Keyboard;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KeyboardInput
-    {
-        public ushort VirtualKey;
-        public ushort ScanCode;
-        public uint Flags;
-        public uint Time;
-        public IntPtr ExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct Rect
     {
         public int Left;
@@ -40,10 +15,6 @@ internal static class WindowsInterop
         public int Right;
         public int Bottom;
     }
-
-    private const uint InputKeyboard = 1;
-    private const uint KeyUp = 0x0002;
-    private const ushort VkEscape = 0x1B;
 
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr window, out Rect rect);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr state);
@@ -53,7 +24,6 @@ internal static class WindowsInterop
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, IntPtr extraInfo);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
-    [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
 
     public static Process? FindArk() => Process.GetProcessesByName("ArkAscended").FirstOrDefault();
 
@@ -76,15 +46,6 @@ internal static class WindowsInterop
         mouse_event(0x0002, 0, 0, 0, IntPtr.Zero);
         mouse_event(0x0004, 0, 0, 0, IntPtr.Zero);
         return true;
-    }
-
-    public static bool SendEscape() => SendSingleKey(VkEscape);
-
-    private static bool SendSingleKey(ushort key)
-    {
-        var inputs = new List<Input>();
-        AddKey(inputs, key);
-        return SendAll(inputs);
     }
 
     public static Bitmap? CaptureWindow(Process process)
@@ -260,30 +221,4 @@ internal static class WindowsInterop
         return new Rectangle(0, (height - designHeight) / 2, width, designHeight);
     }
 
-    private static bool SendAll(List<Input> inputs)
-    {
-        var structureSize = Marshal.SizeOf<Input>();
-        var sent = SendInput((uint)inputs.Count, inputs.ToArray(), structureSize);
-        return sent == (uint)inputs.Count;
-    }
-
-    private static void AddKey(List<Input> inputs, ushort key)
-    {
-        inputs.Add(Keyboard(key, 0));
-        inputs.Add(Keyboard(key, KeyUp));
-    }
-
-    private static Input Keyboard(ushort value, uint flags) => new()
-    {
-        Type = InputKeyboard,
-        Union = new InputUnion
-        {
-            Keyboard = new KeyboardInput
-            {
-                VirtualKey = value,
-                ScanCode = 0,
-                Flags = flags
-            }
-        }
-    };
 }
