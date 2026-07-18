@@ -1,6 +1,6 @@
 # ARK Join Assist
 
-Current app version: **0.18.0**
+Current app version: **0.18.1**
 
 A Windows menu helper for ARK: Survival Ascended. Click **GO** or press the global **Ctrl+G** shortcut once and the helper repeatedly tries ASA's last-played server using only the game's visible menus. Press **Ctrl+G** again to stop from anywhere.
 

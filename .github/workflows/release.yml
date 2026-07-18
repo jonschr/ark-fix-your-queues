@@ -34,7 +34,10 @@ jobs:
           dotnet publish src/ArkFixYourQueues/ArkFixYourQueues.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o artifacts/app
           dotnet publish src/ArkJoinAssist.Updater/ArkJoinAssist.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/updater
           Copy-Item artifacts/updater/ArkJoinAssist.Updater.exe artifacts/app/ArkJoinAssist.Updater.exe -Force
-          tar.exe -a -c -f artifacts/ARK-Join-Assist-win-x64.zip -C artifacts/app .
+          # Compress-Archive produces a ZIP Windows Explorer can browse. The
+          # tar.exe ZIP format extracted with PowerShell but appeared empty in
+          # Explorer on this PC.
+          Compress-Archive -Path (Join-Path (Resolve-Path artifacts/app) '*') -DestinationPath artifacts/ARK-Join-Assist-win-x64.zip -Force
           $hash = (Get-FileHash artifacts/ARK-Join-Assist-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  ARK-Join-Assist-win-x64.zip" | Set-Content artifacts/ARK-Join-Assist-win-x64.zip.sha256 -NoNewline
 
