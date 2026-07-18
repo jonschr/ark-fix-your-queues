@@ -130,8 +130,24 @@ internal static class WindowsInterop
             if (color.R > 90 && color.R > color.G * 1.25 && color.B < color.R * .55) orange++;
             total++;
         }
-        return total > 0 && orange >= total * .18;
+        if (total > 0 && orange >= total * .18) return true;
+
+        // ASA v92 clears the list and disables JOIN while it resolves or has
+        // just cancelled a connection. The browser itself remains: its full-width
+        // filter header and lower-left BACK control are stable, unlike the hub.
+        return BlueRatio(sample, .02, .98, .23, .30) >= .55 &&
+               BlueRatio(sample, .03, .14, .78, .86) >= .25 &&
+               DarkRatio(sample) < .50;
     }
+
+    // ASA v92 opens this full-width Required Mods sheet after pressing the
+    // session browser's JOIN button. Its orange confirmation control is on the
+    // lower-left portion of the sheet, unlike the browser JOIN control at right.
+    public static bool LooksLikeRequiredModsPrompt(Bitmap sample) =>
+        OrangeRatio(sample, .22, .34, .82, .90) >= .12 &&
+        BlueRatio(sample, .09, .14, .08, .92) >= .03 &&
+        BlueRatio(sample, .86, .91, .08, .92) >= .03 &&
+        DarkRatio(sample) >= .45;
 
     public static bool LooksLikeStartupScreen(Bitmap sample) =>
         BlueRatio(sample, .39, .61, .74, .83) >= .28;
@@ -154,6 +170,35 @@ internal static class WindowsInterop
             total++;
         }
         return total > 0 && dark >= total * .68 && purple >= total * .008 && bright >= total * .0015;
+    }
+
+    // A deliberately low-detail fingerprint. It recognizes the overall layout
+    // while tolerating animation, text updates, and the rotating news/advert art.
+    public static byte[] CreateScreenSignature(Bitmap sample)
+    {
+        const int columns = 12;
+        const int rows = 7;
+        var viewport = DesignViewport(sample.Width, sample.Height);
+        var signature = new byte[columns * rows];
+        for (var row = 0; row < rows; row++)
+        for (var column = 0; column < columns; column++)
+        {
+            var x = viewport.Left + (int)((column + .5) * viewport.Width / columns);
+            var y = viewport.Top + (int)((row + .5) * viewport.Height / rows);
+            var pixel = sample.GetPixel(Math.Clamp(x, 0, sample.Width - 1), Math.Clamp(y, 0, sample.Height - 1));
+            signature[row * columns + column] = (byte)((pixel.R * 3 + pixel.G * 4 + pixel.B) / 8);
+        }
+        return signature;
+    }
+
+    public static bool IsSimilarScreen(byte[] expected, byte[] actual)
+    {
+        if (expected.Length == 0 || expected.Length != actual.Length) return false;
+        var difference = 0;
+        for (var index = 0; index < expected.Length; index++) difference += Math.Abs(expected[index] - actual[index]);
+        // Average brightness distance on a 0-255 scale. 26 permits ASA's
+        // ambient animation while still keeping unrelated screens well apart.
+        return difference / (double)expected.Length <= 26;
     }
 
     private static double DarkRatio(Bitmap sample)
@@ -183,6 +228,20 @@ internal static class WindowsInterop
             total++;
         }
         return total == 0 ? 0 : blue / (double)total;
+    }
+
+    private static double OrangeRatio(Bitmap sample, double left, double right, double top, double bottom)
+    {
+        var orange = 0; var total = 0;
+        var region = DesignRegion(sample, left, right, top, bottom);
+        for (var y = region.Top; y < region.Bottom; y++)
+        for (var x = region.Left; x < region.Right; x++)
+        {
+            var color = sample.GetPixel(x, y);
+            if (color.R > 90 && color.R > color.G * 1.25 && color.B < color.R * .55) orange++;
+            total++;
+        }
+        return total == 0 ? 0 : orange / (double)total;
     }
 
     private static void CountBlue(Bitmap sample, double left, double right, double top, double bottom,

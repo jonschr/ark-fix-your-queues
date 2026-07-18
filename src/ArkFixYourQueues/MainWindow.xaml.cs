@@ -29,7 +29,7 @@ public partial class MainWindow : Window
     [DllImport("gdi32.dll")]
     private static extern bool DeleteObject(IntPtr handle);
 
-    private enum JoinWorkflowPhase { Starting, WaitingForMainMenu, WaitingForSessionBrowser, WaitingForJoinResult, WaitingForAttemptReset, WaitingAfterCancel, WaitingAfterBack }
+    private enum JoinWorkflowPhase { Starting, WaitingForMainMenu, WaitingForSessionBrowser, WaitingForRequiredMods, WaitingForJoinResult, WaitingForAttemptReset, WaitingAfterCancel, WaitingAfterBack }
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private Process? _ark;
     private int _runAttemptCount;
@@ -42,11 +42,13 @@ public partial class MainWindow : Window
     private JoinWorkflowPhase _phase;
     private DateTimeOffset _nextWorkflowAction;
     private DateTimeOffset _phaseDeadline;
+    private DateTimeOffset _requiredModsSettleUntil;
     private DateTimeOffset _nextPreviewAt;
     private DateTimeOffset _lastWorkflowProgressAt;
     private bool _inactivityAlertPlayed;
     private DateTimeOffset _nextRecoveryScanAt;
     private int _attemptSpacingSeconds;
+    private int _perClickDelayMilliseconds = 500;
     private bool _preAlertRecoveryEnabled = true;
     private HwndSource? _windowSource;
     private bool _toggleHotkeyRegistered;
@@ -59,6 +61,10 @@ public partial class MainWindow : Window
     private int _runLoadingGlobeCount;
     private int _launchLoadingGlobeCount;
     private readonly DelayPerformanceStore _delayPerformance = DelayPerformanceStore.Load();
+    private readonly LearnedScreenStore _learnedScreens = LearnedScreenStore.Load();
+    private byte[] _latestScreenSignature = [];
+    private bool _teachingScreen;
+    private DateTimeOffset _lastLearnedActionAt;
     private PendingUpdate? _pendingUpdate;
 
     public MainWindow()
@@ -69,7 +75,7 @@ public partial class MainWindow : Window
         Loaded += (_, _) =>
         {
             RenderDelayPerformance();
-            Log("Ready. ASA's Join Last Played server will be used; no app-side server selection is required.");
+            Log("Ready. Choose a server in ASA, then use Go to repeat the in-game JOIN flow.");
             _ = CheckForUpdateAsync();
         };
         Closed += (_, _) =>
@@ -129,6 +135,14 @@ public partial class MainWindow : Window
             DelaySecondsBox.SelectAll();
             return;
         }
+        if (!double.TryParse(PerClickDelayBox.Text.Trim(), out var perClickDelaySeconds) || perClickDelaySeconds is < 0 or > 5)
+        {
+            MessageBox.Show(this, "Per-click delay must be between 0 and 5 seconds.", "Check per-click delay");
+            PerClickDelayBox.Focus();
+            PerClickDelayBox.SelectAll();
+            return;
+        }
+        _perClickDelayMilliseconds = (int)Math.Round(perClickDelaySeconds * 1000);
         _preAlertRecoveryEnabled = PreAlertRecoveryBox.IsChecked == true;
         _ark = WindowsInterop.FindArk();
         if (_ark is null) { MessageBox.Show(this, "ArkAscended.exe is not running.", "ASA not found"); return; }
@@ -149,8 +163,9 @@ public partial class MainWindow : Window
         MarkWorkflowProgress(DateTimeOffset.Now);
         _nextWorkflowAction = DateTimeOffset.Now;
         _phaseDeadline = DateTimeOffset.Now.AddSeconds(15);
-        Log("Join Last Played workflow started. ASA activated automatically.");
+        Log("JOIN workflow started. ASA activated automatically.");
         if (_attemptSpacingSeconds > 0) Log($"Join attempts will be spaced at least {_attemptSpacingSeconds} seconds apart.");
+        if (_perClickDelayMilliseconds > 0) Log($"Every automated click waits {_perClickDelayMilliseconds / 1000d:0.#}s before it is sent.");
         _timer.Start();
     }
 
@@ -168,19 +183,36 @@ public partial class MainWindow : Window
             _nextPreviewAt = now.AddSeconds(1);
         }
         var isSessions = WindowsInterop.LooksLikeSessionBrowser(screen);
+        _latestScreenSignature = WindowsInterop.CreateScreenSignature(screen);
+        var isRequiredMods = WindowsInterop.LooksLikeRequiredModsPrompt(screen);
         var isModal = WindowsInterop.LooksLikeAutoJoinPrompt(screen);
         var isOkFailure = WindowsInterop.LooksLikeSingleOkFailure(screen);
         // The session list is a large blue panel and can resemble the network-failure
         // modal while its centered "Joining server..." overlay is visible. The orange
         // JOIN control is a stronger, mutually exclusive signal for this normal screen.
-        var isNetworkFailure = !isSessions && !isModal &&
+        var isNetworkFailure = !isSessions && !isModal && !isRequiredMods &&
                                WindowsInterop.LooksLikeNetworkFailurePrompt(screen);
+        // ASA briefly fades/builds the Required Mods sheet over several frames.
+        // Suppress error handling for only that one-second transition; normal
+        // failure detection resumes immediately afterwards.
+        var settlingRequiredMods = _phase == JoinWorkflowPhase.WaitingForRequiredMods && now < _requiredModsSettleUntil;
+        if (settlingRequiredMods)
+        {
+            isNetworkFailure = false;
+            isOkFailure = false;
+            isModal = false;
+        }
         // The populated session browser contains enough blue UI to satisfy these
         // broad menu heuristics. Never allow menu actions while the stronger
         // session-browser signal is present (including its Joining server overlay).
-        var isStartup = !isSessions && WindowsInterop.LooksLikeStartupScreen(screen);
         var isMainMenu = !isSessions && WindowsInterop.LooksLikeMainMenu(screen);
+        var isStartup = !isSessions && !isMainMenu && WindowsInterop.LooksLikeStartupScreen(screen);
         var isLoadingGlobe = WindowsInterop.LooksLikeLoadingGlobe(screen);
+        var knownScreen = isSessions || isRequiredMods || isModal || isOkFailure || isNetworkFailure || isMainMenu || isStartup || isLoadingGlobe;
+        if (!knownScreen && _phase != JoinWorkflowPhase.WaitingForRequiredMods &&
+            now - _lastWorkflowProgressAt >= TimeSpan.FromSeconds(1) &&
+            now - _lastLearnedActionAt >= TimeSpan.FromSeconds(3) &&
+            TryApplyLearnedScreenAction(now)) return;
         if (!isNetworkFailure && _networkDismissalAttemptAt is not null)
         {
             _networkDismissalAttemptAt = null;
@@ -223,14 +255,14 @@ public partial class MainWindow : Window
         else _loadingGlobeVisible = false;
 
         var inactiveFor = now - _lastWorkflowProgressAt;
-        if (_preAlertRecoveryEnabled && now >= _nextRecoveryScanAt)
+        if (!settlingRequiredMods && _preAlertRecoveryEnabled && now >= _nextRecoveryScanAt)
         {
             _nextRecoveryScanAt = now.AddSeconds(5);
             if (TryPreAlertRecovery(now, isNetworkFailure, isOkFailure, isModal)) return;
             if (_phase != JoinWorkflowPhase.WaitingForJoinResult)
                 Log("Recovery scan found no safe known action; the next scan will run in 5 seconds.");
         }
-        if (!_inactivityAlertPlayed && inactiveFor >= TimeSpan.FromSeconds(5))
+        if (!settlingRequiredMods && !_inactivityAlertPlayed && inactiveFor >= TimeSpan.FromSeconds(5))
         {
             _inactivityAlertPlayed = true;
             SystemSounds.Exclamation.Play();
@@ -246,7 +278,7 @@ public partial class MainWindow : Window
             }
             else if (isOkFailure)
             {
-                if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .612)) { Stop("Could not click OK on the joining-failed dialog."); return; }
+                if (!ClickArk(_ark, .500, .612)) { Stop("Could not click OK on the joining-failed dialog."); return; }
                 Log("Joining-failed dialog detected; clicked OK.");
                 MarkWorkflowProgress(now);
                 _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
@@ -254,7 +286,7 @@ public partial class MainWindow : Window
             }
             else if (isModal)
             {
-                if (!WindowsInterop.ClickWindowDesignRelative(_ark, .558, .675)) { Stop("Could not click CANCEL on the connection modal."); return; }
+                if (!ClickArk(_ark, .558, .675)) { Stop("Could not click CANCEL on the connection modal."); return; }
                 Log("Connection/full modal detected; clicked CANCEL.");
                 MarkWorkflowProgress(now);
                 _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
@@ -285,7 +317,7 @@ public partial class MainWindow : Window
                     // dialog. Escape opens ASA's pause menu, which is the wrong
                     // screen. This known session-browser control is the reliable
                     // reset path, even if ASA has dimmed or redrawn the list.
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .087, .811)) { Stop("Could not click BACK after the configured post-JOIN delay."); return; }
+                    if (!ClickArk(_ark, .087, .811)) { Stop("Could not click BACK after the configured post-JOIN delay."); return; }
                     Log($"Post-JOIN delay elapsed ({_attemptSpacingSeconds}s); clicked the session browser BACK control.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingAfterBack;
@@ -308,7 +340,7 @@ public partial class MainWindow : Window
                 }
                 if (isSessions)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .087, .811)) { Stop("Could not click BACK after clearing the attempt."); return; }
+                    if (!ClickArk(_ark, .087, .811)) { Stop("Could not click BACK after clearing the attempt."); return; }
                     Log("Attempt cleared; clicked BACK.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingAfterBack;
@@ -318,7 +350,7 @@ public partial class MainWindow : Window
                 }
                 if (isStartup)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .795)) { Stop("Could not click PRESS TO START after cancelling a pending attempt."); return; }
+                    if (!ClickArk(_ark, .500, .795)) { Stop("Could not click PRESS TO START after cancelling a pending attempt."); return; }
                     Log("Pending attempt cleared to the title screen; clicked PRESS TO START once.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingForMainMenu;
@@ -328,7 +360,7 @@ public partial class MainWindow : Window
                 }
                 if (isMainMenu)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .387, .517)) { Stop("Could not click JOIN GAME after cancelling a pending attempt."); return; }
+                    if (!ClickArk(_ark, .387, .517)) { Stop("Could not click JOIN GAME after cancelling a pending attempt."); return; }
                     Log("Pending attempt cleared; clicked JOIN GAME.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingForSessionBrowser;
@@ -346,22 +378,22 @@ public partial class MainWindow : Window
                 }
                 else if (isOkFailure)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .612)) { Stop("Could not click OK on the existing joining-failed dialog."); return; }
+                    if (!ClickArk(_ark, .500, .612)) { Stop("Could not click OK on the existing joining-failed dialog."); return; }
                     Log("Dismissed an existing joining-failed dialog.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
                 }
                 else if (isModal)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .558, .675)) { Stop("Could not cancel the existing connection modal."); return; }
+                    if (!ClickArk(_ark, .558, .675)) { Stop("Could not cancel the existing connection modal."); return; }
                     Log("Cancelled an existing connection modal.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingAfterCancel; _nextWorkflowAction = now.AddMilliseconds(650); _phaseDeadline = now.AddSeconds(12);
                 }
-                else if (isSessions) ClickJoinLastPlayed(now);
+                else if (isSessions) ClickSelectedServerJoin(now);
                 else if (isStartup)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .795)) { Stop("Could not click PRESS TO START."); return; }
+                    if (!ClickArk(_ark, .500, .795)) { Stop("Could not click PRESS TO START."); return; }
                     Log("Clicked PRESS TO START on the ASA title screen.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingForMainMenu;
@@ -370,7 +402,7 @@ public partial class MainWindow : Window
                 }
                 else if (isMainMenu)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .387, .517)) { Stop("Could not click JOIN GAME."); return; }
+                    if (!ClickArk(_ark, .387, .517)) { Stop("Could not click JOIN GAME."); return; }
                     Log("Clicked JOIN GAME.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingForSessionBrowser;
@@ -379,7 +411,7 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .795)) { Stop("Could not click PRESS TO START."); return; }
+                    if (!ClickArk(_ark, .500, .795)) { Stop("Could not click PRESS TO START."); return; }
                     Log("Clicked PRESS TO START on the ASA startup screen.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingForMainMenu; _nextWorkflowAction = now.AddMilliseconds(250);
@@ -392,20 +424,38 @@ public partial class MainWindow : Window
                     else _nextWorkflowAction = now.AddMilliseconds(250);
                     break;
                 }
-                if (!WindowsInterop.ClickWindowDesignRelative(_ark, .387, .517)) { Stop("Could not click JOIN GAME."); return; }
+                if (!ClickArk(_ark, .387, .517)) { Stop("Could not click JOIN GAME."); return; }
                 Log("Clicked JOIN GAME.");
                 MarkWorkflowProgress(now);
                 _phase = JoinWorkflowPhase.WaitingForSessionBrowser; _nextWorkflowAction = now.AddMilliseconds(250); _phaseDeadline = now.AddSeconds(12);
                 break;
             case JoinWorkflowPhase.WaitingForSessionBrowser:
-                if (isSessions) ClickJoinLastPlayed(now);
+                // ASA can draw Required Mods late, after the browser has briefly
+                // disappeared. It remains a safe, positively recognized next step.
+                if (isRequiredMods) ClickRequiredModsJoin(now);
+                else if (isSessions) ClickSelectedServerJoin(now);
                 else if (now >= _phaseDeadline) { Log("Session browser is still unresolved; continuing recovery scans."); _phaseDeadline = now.AddSeconds(12); }
+                else _nextWorkflowAction = now.AddMilliseconds(250);
+                break;
+            case JoinWorkflowPhase.WaitingForRequiredMods:
+                // This is a distinct ASA sheet. Do not use its fixed confirmation
+                // coordinate unless the sheet is positively identified: a blind
+                // click here can activate unrelated menu/DLC controls.
+                if (isRequiredMods && now >= _nextWorkflowAction)
+                {
+                    ClickRequiredModsJoin(now);
+                }
+                else if (now >= _phaseDeadline)
+                {
+                    Log("Required Mods confirmation was not recognized; waiting safely without sending input.");
+                    _phaseDeadline = now.AddSeconds(12);
+                }
                 else _nextWorkflowAction = now.AddMilliseconds(250);
                 break;
             case JoinWorkflowPhase.WaitingAfterBack:
                 if (isStartup)
                 {
-                    if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .795)) { Stop("Could not click PRESS TO START after returning from the session browser."); return; }
+                    if (!ClickArk(_ark, .500, .795)) { Stop("Could not click PRESS TO START after returning from the session browser."); return; }
                     Log("Returned to the ASA title screen; clicked PRESS TO START once.");
                     MarkWorkflowProgress(now);
                     _phase = JoinWorkflowPhase.WaitingForMainMenu;
@@ -419,7 +469,7 @@ public partial class MainWindow : Window
                     else _nextWorkflowAction = now.AddMilliseconds(250);
                     break;
                 }
-                if (!WindowsInterop.ClickWindowDesignRelative(_ark, .387, .517)) { Stop("Could not click JOIN GAME."); return; }
+                if (!ClickArk(_ark, .387, .517)) { Stop("Could not click JOIN GAME."); return; }
                 Log("Clicked JOIN GAME for the next attempt.");
                 MarkWorkflowProgress(now);
                 _phase = JoinWorkflowPhase.WaitingForSessionBrowser; _nextWorkflowAction = now.AddMilliseconds(250); _phaseDeadline = now.AddSeconds(12);
@@ -427,25 +477,86 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ClickJoinLastPlayed(DateTimeOffset now)
+    private void ClickSelectedServerJoin(DateTimeOffset now)
     {
-        if (DeferForAttemptSpacing(now)) return;
-        if (_ark is null || !WindowsInterop.ClickWindowDesignRelative(_ark, .891, .823))
+        if (_ark is null || !ClickArk(_ark, .891, .896))
         {
-            Stop("Could not click JOIN LAST PLAYED.");
+            Stop("Could not click JOIN on the selected ASA server.");
             return;
         }
-        RecordAttempt("Clicked JOIN LAST PLAYED", now);
+        Log("Clicked JOIN on the selected ASA server; waiting for Required Mods.");
+        MarkWorkflowProgress(now);
+        _phase = JoinWorkflowPhase.WaitingForRequiredMods;
+        _requiredModsSettleUntil = now.AddSeconds(1);
+        _nextWorkflowAction = now.AddMilliseconds(250);
+        _phaseDeadline = now.AddSeconds(12);
     }
 
-    private bool DeferForAttemptSpacing(DateTimeOffset now)
+    private void ClickRequiredModsJoin(DateTimeOffset now)
     {
-        if (_attemptSpacingSeconds == 0 || _lastJoinAttemptAt is null) return false;
-        var earliest = _lastJoinAttemptAt.Value.AddSeconds(_attemptSpacingSeconds);
-        if (now >= earliest) return false;
-        _nextWorkflowAction = earliest;
-        Log($"Waiting {Math.Ceiling((earliest - now).TotalSeconds)}s before the next join attempt.");
+        if (_ark is null || !ClickArk(_ark, .276, .862))
+        {
+            Stop("Could not click JOIN on ASA's Required Mods screen.");
+            return;
+        }
+        RecordAttempt("Confirmed Required Mods and clicked JOIN", now);
+    }
+
+    private bool TryApplyLearnedScreenAction(DateTimeOffset now)
+    {
+        if (_ark is null) return false;
+        var match = _learnedScreens.Screens.LastOrDefault(screen =>
+            WindowsInterop.IsSimilarScreen(screen.Signature, _latestScreenSignature));
+        if (match is null) return false;
+        if (!ClickArk(_ark, match.X, match.Y)) return false;
+        _lastLearnedActionAt = now;
+        MarkWorkflowProgress(now);
+        Log($"Used learned action: {match.Action}.");
         return true;
+    }
+
+    private void TeachScreen_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_latestScreenSignature.Length == 0)
+        {
+            TeachStatusText.Text = "Start Go first so the app can capture ASA's current screen.";
+            return;
+        }
+        _teachingScreen = true;
+        ScreenPreviewBorder.Cursor = Cursors.Cross;
+        TeachScreenButton.Content = "CLICK THE TARGET BELOW";
+        TeachStatusText.Text = "Click the control in the latest ASA preview that the helper should use on this screen.";
+    }
+
+    private void ScreenPreview_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_teachingScreen || ScreenPreviewBorder.ActualWidth < 1 || ScreenPreviewBorder.ActualHeight < 1) return;
+        var point = e.GetPosition(ScreenPreviewBorder);
+        var item = TeachActionBox.SelectedItem as ComboBoxItem;
+        var action = item?.Content?.ToString() ?? "Custom next step";
+        var learned = new LearnedScreen
+        {
+            Name = action,
+            Action = action,
+            X = Math.Clamp(point.X / ScreenPreviewBorder.ActualWidth, 0d, 1d),
+            Y = Math.Clamp(point.Y / ScreenPreviewBorder.ActualHeight, 0d, 1d),
+            Signature = _latestScreenSignature.ToArray()
+        };
+        _learnedScreens.Screens.Add(learned);
+        _learnedScreens.Save();
+        _teachingScreen = false;
+        ScreenPreviewBorder.Cursor = Cursors.Arrow;
+        TeachScreenButton.Content = "TEACH THIS SCREEN";
+        TeachStatusText.Text = $"Saved “{action}”. It will be used only when this layout is recognized confidently.";
+        Log($"Learned screen action saved: {action}.");
+        e.Handled = true;
+    }
+
+    private bool ClickArk(Process? process, double x, double y)
+    {
+        if (process is null) return false;
+        if (_perClickDelayMilliseconds > 0) Thread.Sleep(_perClickDelayMilliseconds);
+        return WindowsInterop.ClickWindowDesignRelative(process, x, y);
     }
 
     private void RecordAttempt(string action, DateTimeOffset now)
@@ -492,7 +603,7 @@ public partial class MainWindow : Window
         }
         if (isOkFailure)
         {
-            if (!WindowsInterop.ClickWindowDesignRelative(_ark, .500, .612)) return false;
+            if (!ClickArk(_ark, .500, .612)) return false;
             Log("Recovery scan clicked OK on the joining-failed dialog.");
             MarkWorkflowProgress(now);
             _phase = JoinWorkflowPhase.WaitingAfterCancel;
@@ -502,7 +613,7 @@ public partial class MainWindow : Window
         }
         if (isModal)
         {
-            if (!WindowsInterop.ClickWindowDesignRelative(_ark, .558, .675)) return false;
+            if (!ClickArk(_ark, .558, .675)) return false;
             Log("Recovery scan clicked CANCEL on the connection/full dialog.");
             MarkWorkflowProgress(now);
             _phase = JoinWorkflowPhase.WaitingAfterCancel;
@@ -539,7 +650,7 @@ public partial class MainWindow : Window
         // This classifier covers two ASA variants: a centered single ACCEPT button
         // and the full-server ACCEPT/CANCEL pair. This point is inside the former
         // and on CANCEL in the latter, so both safely return control to our loop.
-        if (!WindowsInterop.ClickWindowDesignRelative(_ark, .545, .675))
+        if (!ClickArk(_ark, .545, .675))
         {
             Stop("Could not dismiss the network-failure dialog.");
             return true;
@@ -566,6 +677,7 @@ public partial class MainWindow : Window
     private void SetRunning(bool running)
     {
         DelaySecondsBox.IsEnabled = !running;
+        PerClickDelayBox.IsEnabled = !running;
         PreAlertRecoveryBox.IsEnabled = !running;
         StartButton.IsEnabled = !running; StopButton.IsEnabled = running;
     }

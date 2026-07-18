@@ -1,6 +1,6 @@
 # ARK Join Assist
 
-Current app version: **0.13.0**
+Current app version: **0.18.0**
 
 A Windows menu helper for ARK: Survival Ascended. Click **GO** or press the global **Ctrl+G** shortcut once and the helper repeatedly tries ASA's last-played server using only the game's visible menus. Press **Ctrl+G** again to stop from anywhere.
 
@@ -117,6 +117,16 @@ Yes, depending on where and how they change the pixels. This implementation is r
 | Another window covers ASA, ASA is minimized, or a notification overlays a detector region | The capture contains the obstruction; matching becomes unreliable. |
 
 The highest-risk assumptions are the orange JOIN LAST PLAYED area, the broad blue main-menu region, and fixed click positions. When ASA changes its UI, compare the app's latest-screen preview with the two diagrams above and update the normalized regions or click points in `WindowsInterop.cs` and `MainWindow.xaml.cs`.
+
+### Teaching a changed ASA screen
+
+When ASA introduces a screen that the built-in workflow does not recognize, use the **Teach an unfamiliar screen** panel beneath the latest-screen preview:
+
+1. Leave ASA on the unfamiliar screen and start **GO** once so its preview is current.
+2. Select what the target does: **Continue / JOIN**, **Back / cancel**, **Confirm / OK**, or **Custom next step**.
+3. Click **TEACH THIS SCREEN**, then click the target control in the preview.
+
+The app saves a low-detail visual fingerprint of that layout and the normalized click position in the local Windows profile (`%LocalAppData%\ArkJoinAssist\learned-screens.json`). Built-in state detection always takes priority. A learned click is used only after the current screen does not match a built-in state and its overall layout matches the saved fingerprint; it is rate-limited to one action every three seconds. This makes the learned mapping resilient to animation and rotating art without allowing an unfamiliar screen to receive a speculative click.
 
 ## Safety boundaries
 
